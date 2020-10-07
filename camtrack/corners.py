@@ -14,6 +14,7 @@ import click
 import cv2
 import numpy as np
 import pims
+import math
 
 from _corners import FrameCorners, CornerStorage, StorageImpl
 from _corners import dump, load, draw, without_short_tracks, create_cli
@@ -42,13 +43,27 @@ def filter_old_corners(ids, points, sizes, depth, image_0_pyramid, image_1_pyram
     next_pts = None
     status = None
     err = None
+    prev_pts = None
+    prev_status = None
+    prev_err = None
 
     for cur_depth in range(depth - 1, -1, -1):
         next_pts, status, err = cv2.calcOpticalFlowPyrLK(
             image_0_pyramid[cur_depth],
             image_1_pyramid[cur_depth],
             np.asarray(points, dtype=np.float32) / (2 ** cur_depth),
-            None if next_pts is None else next_pts * 2,
+            None,
+            status,
+            err,
+            WIN_SIZE,
+            PYRAMID_DEPTH,
+            (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.002)
+        )
+        prev_pts, prev_status, prev_err = cv2.calcOpticalFlowPyrLK(
+            image_1_pyramid[cur_depth],
+            image_0_pyramid[cur_depth],
+            np.asarray(next_pts, dtype=np.float32) / (2 ** cur_depth),
+            None,
             status,
             err,
             WIN_SIZE,
@@ -57,7 +72,11 @@ def filter_old_corners(ids, points, sizes, depth, image_0_pyramid, image_1_pyram
         )
 
     status = status.ravel()
-    good_corners = (status == 1)
+    prev_status = prev_status.ravel()
+
+    distances = np.array([math.sqrt(x * x + y * y) for (x, y) in np.reshape(points - prev_pts, (-1, 2))])
+
+    good_corners = (status == 1) & (prev_status == 1) & (distances < 0.7)
     return (list(np.asarray(ids)[good_corners]), list(np.asarray(next_pts)[good_corners]), list(np.asarray(sizes)[good_corners]))
 
 def make_points_mask(points, sizes, height, width):
@@ -79,6 +98,7 @@ def _build_impl(frame_sequence: pims.FramesSequence,
     height = frame_sequence.frame_shape[0]
     width = frame_sequence.frame_shape[1]
     cur_id = 0
+    first_frame = True
 
     for frame, image_1 in enumerate(frame_sequence):
         image_1 = (image_1 * 255).astype(np.uint8);
@@ -91,7 +111,7 @@ def _build_impl(frame_sequence: pims.FramesSequence,
             new_corners = cv2.goodFeaturesToTrack(
                 image_1_pyramid[depth],
                 MAX_CORNERS - len(points),
-                0.075,
+                0.00075 if first_frame else 0.075,
                 8 << depth,
                 mask=mask,
                 blockSize=BLOCK_SIZE
@@ -112,6 +132,7 @@ def _build_impl(frame_sequence: pims.FramesSequence,
         builder.set_corners_at_frame(frame, FrameCorners(np.array(ids), np.array(points), np.array(sizes)))
         image_0 = image_1
         image_0_pyramid = image_1_pyramid
+        first_frame = False
 
 
 def build(frame_sequence: pims.FramesSequence,
