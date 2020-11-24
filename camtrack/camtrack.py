@@ -49,7 +49,7 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
         pose_to_view[known_view[i][0]] = pose_to_view_mat3x4(known_view[i][1])
 
     corrs = build_correspondences(corner_storage[known_view[0][0]], corner_storage[known_view[1][0]])
-    points, corrs_ids, med_cos = triangulate_correspondences(corrs, pose_to_view[known_view[0][0]], pose_to_view[known_view[1][0]], intrinsic_mat, TriangulationParameters(1, 2, .1))
+    points, corrs_ids, med_cos = triangulate_correspondences(corrs, pose_to_view[known_view[0][0]], pose_to_view[known_view[1][0]], intrinsic_mat, TriangulationParameters(1, 1.1, .1))
     pointCloudBuilder = PointCloudBuilder(corrs_ids, points)
 
     while True:
@@ -68,7 +68,7 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
                         p3d.append(pointCloudBuilder.points[i1])
                         p2d.append(corner_storage[i].points[i2])
                         i2 += 1
-                print(len(p3d))
+                #print(len(p3d))
                 p3d = np.array(p3d)
                 p2d = np.array(p2d)
                 try:
@@ -84,8 +84,8 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
                             inner_corrs = build_correspondences(corner_storage[i2], fil_frame_cors)
                             if inner_corrs is None or len(inner_corrs) == 0:
                                 continue
-                            inner_points, inner_corrs_ids, inner_med_cos = triangulate_correspondences(inner_corrs, pose_to_view[i2], pose_to_view[i], intrinsic_mat, TriangulationParameters(1, 2, .1))
-                            pointCloudBuilder.add_points(inner_corrs_ids, p3d)
+                            inner_points, inner_corrs_ids, inner_med_cos = triangulate_correspondences(inner_corrs, pose_to_view[i2], pose_to_view[i], intrinsic_mat, TriangulationParameters(1, 1.1, .1))
+                            pointCloudBuilder.add_points(inner_corrs_ids, inner_points)
                 except Exception:
                     pass
         if new_views == 0:
@@ -116,3 +116,6 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
 if __name__ == '__main__':
     # pylint:disable=no-value-for-parameter
     create_cli(track_and_calc_colors)()
+
+
+
