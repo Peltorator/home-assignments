@@ -29,7 +29,7 @@ from _camtrack import (
 )
 
 INF = 1e9
-TrPams = TriangulationParameters(1, 1.1, .1)
+TrPams = TriangulationParameters(6, 1.1, .1)
 
 def test_corrs(corrs):
     return len(corrs[0]) >= 10
@@ -52,7 +52,7 @@ def get_quality(c1, c2, intrinsic_mat):
 
     matE, mask2 = findEssentialMat(corrs.points_1, corrs.points_2, intrinsic_mat)
     mask2 = mask2.flatten()
-    if not check_mask_essential(mask):
+    if not check_mask_essential(mask2):
         return -INF, None, None
     filtered_corrs = Correspondences(corrs.ids[mask2], corrs.points_1[mask2], corrs.points_2[mask2])
 
