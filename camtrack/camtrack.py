@@ -29,10 +29,10 @@ from _camtrack import (
 )
 
 INF = 1e9
-TrPams = TriangulationParameters(6, 1.1, .1)
+TrPams = TriangulationParameters(6, 1.1, 0.1)
 
 def test_corrs(corrs):
-    return len(corrs[0]) >= 10
+    return len(corrs[0]) >= 50
 
 def check_mask_essential(mask):
     return sum(mask) <= len(mask) * 0.8
@@ -44,17 +44,17 @@ def get_quality(c1, c2, intrinsic_mat):
     corrs = build_correspondences(c1, c2)
     if not test_corrs(corrs):
         return -INF, None, None
+ 
+    matE, mask2 = findEssentialMat(corrs.points_1, corrs.points_2, intrinsic_mat)
+    mask2 = mask2.flatten()
+    if matE is None or (not check_mask_essential(mask2)):
+        return -INF, None, None
+    filtered_corrs = Correspondences(corrs.ids[mask2], corrs.points_1[mask2], corrs.points_2[mask2])
 
-    matH, mask = findHomography(corrs.points_1, corrs.points_2, RANSAC)
+    matH, mask = findHomography(filtered_corrs.points_1, filtered_corrs.points_2, RANSAC)
     mask = mask.flatten()
     if not check_mask_homography(mask):
         return -INF, None, None
-
-    matE, mask2 = findEssentialMat(corrs.points_1, corrs.points_2, intrinsic_mat)
-    mask2 = mask2.flatten()
-    if not check_mask_essential(mask2):
-        return -INF, None, None
-    filtered_corrs = Correspondences(corrs.ids[mask2], corrs.points_1[mask2], corrs.points_2[mask2])
 
     R1, R2, t = decomposeEssentialMat(matE)
     vm1 = None
@@ -70,20 +70,23 @@ def get_quality(c1, c2, intrinsic_mat):
             quality = len(points)
     return quality, vm1, vm2
 
+GOOD_ENOUGH = 1000
 
 def get_known_views(intrinsic_mat, corner_storage):
     ans1 = None
     ans2 = None
     best_quality = -INF
     for i, ci in enumerate(corner_storage):
-        for j, cj in enumerate(corner_storage):
-            if i != j:
-                cur_qual, vm1, vm2 = get_quality(ci, cj, intrinsic_mat)
-                print('Frames {0} and {1}. Quality: {2}'.format(i, j, cur_qual))
-                if cur_qual > best_quality:
-                    ans1 = (i, vm1)
-                    ans2 = (j, vm2)
-                    best_quality = cur_qual
+        for j in range(i + 1, len(corner_storage)):
+            cj = corner_storage[j]
+            cur_qual, vm1, vm2 = get_quality(ci, cj, intrinsic_mat)
+            print('Frames {0} and {1}. Quality: {2}'.format(i, j, cur_qual))
+            if cur_qual > GOOD_ENOUGH:
+                return ((i, vm1), (j, vm2))
+            elif cur_qual > best_quality:
+                ans1 = (i, vm1)
+                ans2 = (j, vm2)
+                best_quality = cur_qual
     return ans1, ans2
 
 
